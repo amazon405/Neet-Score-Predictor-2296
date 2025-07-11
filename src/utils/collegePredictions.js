@@ -3,7 +3,7 @@ import { getCollegesForPredictor } from './collegeDataService';
 
 // Fallback database in case Supabase connection fails
 const fallbackCollegeDatabase = [
-  // Top Government Medical Colleges
+  // Top Government Medical Colleges - sorted by cutoff rank
   {
     name: "All India Institute of Medical Sciences (AIIMS), New Delhi",
     location: "Delhi",
@@ -14,25 +14,77 @@ const fallbackCollegeDatabase = [
     seats: 125
   },
   {
-    name: "Government Medical College, Mumbai",
-    location: "Maharashtra", 
+    name: "ESIC Dental Coll, Gulbarga",
+    location: "Karnataka", 
     type: "Government",
-    quota: "State Quota",
-    cutoffRanks: { General: 2500, OBC: 3500, SC: 5000, ST: 6000, EWS: 2800 },
-    fees: "₹50,000/year",
+    quota: "All India Quota",
+    cutoffRanks: { General: 72818, OBC: 85000, SC: 95000, ST: 105000, EWS: 78000 },
+    fees: "₹24,000/year",
+    seats: 100
+  },
+  {
+    name: "Faculty of Dent, Jamia Millia",
+    location: "Delhi",
+    type: "Government", 
+    quota: "All India Quota",
+    cutoffRanks: { General: 81109, OBC: 90000, SC: 100000, ST: 110000, EWS: 85000 },
+    fees: "₹31,100/year",
+    seats: 80
+  },
+  {
+    name: "ABVIMS (Dr RML Hosp), Delhi",
+    location: "Delhi",
+    type: "Government",
+    quota: "All India Quota", 
+    cutoffRanks: { General: 286497, OBC: 320000, SC: 350000, ST: 380000, EWS: 300000 },
+    fees: "₹39,000/year",
     seats: 150
   },
   {
-    name: "Kasturba Medical College (KMC), Manipal",
-    location: "Karnataka",
-    type: "Private",
+    name: "Amrita School of Med. Faridabad",
+    location: "Haryana",
+    type: "Deemed University",
     quota: "All India Quota",
-    cutoffRanks: { General: 8000, OBC: 12000, SC: 18000, ST: 20000, EWS: 9000 },
-    fees: "₹24,50,000/year",
-    seats: 250
+    cutoffRanks: { General: 296345, OBC: 330000, SC: 360000, ST: 390000, EWS: 310000 },
+    fees: "₹25,00,000/year",
+    seats: 200
   },
-  // ... more colleges from your previous implementation
-  // This is just a fallback - we'll try to fetch from Supabase first
+  {
+    name: "BVDU, Pune", 
+    location: "Maharashtra",
+    type: "Deemed University",
+    quota: "All India Quota",
+    cutoffRanks: { General: 299516, OBC: 335000, SC: 365000, ST: 395000, EWS: 315000 },
+    fees: "₹23,60,000/year",
+    seats: 180
+  },
+  {
+    name: "Amrita School of Med, Kochi",
+    location: "Kerala",
+    type: "Deemed University", 
+    quota: "All India Quota",
+    cutoffRanks: { General: 328260, OBC: 365000, SC: 395000, ST: 425000, EWS: 345000 },
+    fees: "₹25,00,000/year",
+    seats: 150
+  },
+  {
+    name: "DY Patil, Kolhapur",
+    location: "Maharashtra",
+    type: "Deemed University",
+    quota: "All India Quota", 
+    cutoffRanks: { General: 342655, OBC: 380000, SC: 410000, ST: 440000, EWS: 360000 },
+    fees: "₹23,10,000/year",
+    seats: 160
+  },
+  {
+    name: "Datta Meghe Med Coll, Nagpur",
+    location: "Maharashtra",
+    type: "Deemed University",
+    quota: "All India Quota",
+    cutoffRanks: { General: 508460, OBC: 545000, SC: 575000, ST: 605000, EWS: 525000 },
+    fees: "₹22,00,000/year",
+    seats: 140
+  }
 ];
 
 // Get colleges from database or use fallback if needed
@@ -105,9 +157,10 @@ export const getCollegePredictions = async (userRank, category, preferredState, 
         });
       }
     });
+
+    // Sort by cutoff rank (ascending - better ranks first)
+    return predictions.sort((a, b) => a.cutoffRank - b.cutoffRank);
     
-    // Sort by admission chances (highest first)
-    return predictions.sort((a, b) => b.admissionChance - a.admissionChance);
   } catch (error) {
     console.error('Error in getCollegePredictions:', error);
     return [];
@@ -168,7 +221,7 @@ export const getCollegesByQuota = async (quota, category, userRank) => {
         };
       })
       .filter(college => college.admissionChance > 0)
-      .sort((a, b) => b.admissionChance - a.admissionChance);
+      .sort((a, b) => a.cutoffRank - b.cutoffRank); // Sort by cutoff rank
   } catch (error) {
     console.error('Error in getCollegesByQuota:', error);
     return [];
@@ -177,7 +230,7 @@ export const getCollegesByQuota = async (quota, category, userRank) => {
 
 export const getCollegeRecommendations = async (userRank, category, studentState = null, quotaPreference = 'All') => {
   try {
-    // Get all predictions
+    // Get all predictions sorted by cutoff rank
     const allPredictions = await getCollegePredictions(userRank, category, 'All States', quotaPreference);
     
     // Separate into categories
@@ -186,10 +239,9 @@ export const getCollegeRecommendations = async (userRank, category, studentState
     const moderateChance = allPredictions.filter(c => c.admissionChance >= 20 && c.admissionChance < 40);
     
     // Prioritize home state colleges
-    const homeStateColleges = studentState ? 
-      allPredictions.filter(c => c.location === studentState) : [];
+    const homeStateColleges = studentState ? allPredictions.filter(c => c.location === studentState) : [];
     
-    // Separate by quota type
+    // Separate by quota type  
     const allIndiaQuota = allPredictions.filter(c => c.quota === 'All India Quota');
     const stateQuota = allPredictions.filter(c => c.quota === 'State Quota');
     const managementQuota = allPredictions.filter(c => c.quota === 'Management Quota');
@@ -197,7 +249,7 @@ export const getCollegeRecommendations = async (userRank, category, studentState
     return {
       all: allPredictions,
       highChance,
-      goodChance,
+      goodChance, 
       moderateChance,
       homeState: homeStateColleges,
       government: allPredictions.filter(c => c.type === 'Government'),
@@ -210,17 +262,9 @@ export const getCollegeRecommendations = async (userRank, category, studentState
   } catch (error) {
     console.error('Error in getCollegeRecommendations:', error);
     return {
-      all: [],
-      highChance: [],
-      goodChance: [],
-      moderateChance: [],
-      homeState: [],
-      government: [],
-      private: [],
-      deemed: [],
-      allIndiaQuota: [],
-      stateQuota: [],
-      managementQuota: []
+      all: [], highChance: [], goodChance: [], moderateChance: [],
+      homeState: [], government: [], private: [], deemed: [],
+      allIndiaQuota: [], stateQuota: [], managementQuota: []
     };
   }
 };
