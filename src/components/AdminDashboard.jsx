@@ -7,9 +7,11 @@ import AnalyticsOverview from './admin/AnalyticsOverview';
 import EmailServiceConfig from './admin/EmailServiceConfig';
 import GoogleSheetsIntegration from './admin/GoogleSheetsIntegration';
 import ExportManager from './admin/ExportManager';
+import CollegeDataManager from './admin/CollegeDataManager';
 import { supabase } from '../lib/supabase';
 
-const { FiUsers, FiBarChart3, FiMail, FiFileText, FiSettings, FiLogOut, FiDownload, FiDatabase, FiUser, FiPower, FiWifi } = FiIcons;
+const { FiUsers, FiBarChart3, FiMail, FiFileText, FiSettings, FiLogOut, 
+       FiDownload, FiDatabase, FiUser, FiPower, FiWifi, FiBookOpen } = FiIcons;
 
 const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) => {
   const [activeTab, setActiveTab] = useState('overview');
@@ -27,6 +29,7 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
     { id: 'overview', label: 'Overview', icon: FiBarChart3 },
     { id: 'students', label: 'Student Data', icon: FiUsers },
     { id: 'analytics', label: 'Analytics', icon: FiBarChart3 },
+    { id: 'colleges', label: 'College Data', icon: FiBookOpen },
     { id: 'email', label: 'Email Service', icon: FiMail },
     { id: 'sheets', label: 'Google Sheets', icon: FiFileText },
     { id: 'export', label: 'Export Data', icon: FiDownload },
@@ -40,7 +43,6 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
 
   const fetchDashboardStats = async () => {
     setStatsLoading(true);
-    
     try {
       console.log('Fetching dashboard statistics...');
       setConnectionStatus('checking');
@@ -50,17 +52,17 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
         supabase.from('student_predictions').select('*', { count: 'exact', head: true }),
         supabase.from('student_predictions').select('total_score').limit(100)
       ]);
-
+      
       const timeoutPromise = new Promise((_, reject) => 
         setTimeout(() => reject(new Error('Stats timeout')), 6000)
       );
 
       const [countResult, scoresResult] = await Promise.race([statsPromise, timeoutPromise]);
-
+      
       const totalStudents = countResult.count || 0;
       const scores = scoresResult.data || [];
       const avgScore = scores.length > 0 
-        ? Math.round(scores.reduce((sum, item) => sum + (item.total_score || 0), 0) / scores.length)
+        ? Math.round(scores.reduce((sum, item) => sum + (item.total_score || 0), 0) / scores.length) 
         : 0;
 
       // Calculate today's predictions
@@ -76,13 +78,11 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
         emailsSent: totalStudents, // Assume most got emails
         avgScore
       });
-
+      
       setConnectionStatus('connected');
       console.log('Dashboard stats loaded successfully:', { totalStudents, avgScore });
-
     } catch (error) {
       console.warn('Stats loading failed, using fallback values:', error);
-      
       // Use reasonable fallback stats instead of showing error
       setStats({
         totalStudents: 150,
@@ -90,7 +90,6 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
         emailsSent: 142,
         avgScore: 485
       });
-      
       setConnectionStatus('limited');
     } finally {
       setStatsLoading(false);
@@ -99,7 +98,6 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
 
   const handleLogout = async () => {
     if (isLoggingOut) return;
-    
     setIsLoggingOut(true);
     try {
       await onLogout();
@@ -117,6 +115,8 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
         return <StudentDataTable />;
       case 'analytics':
         return <AnalyticsOverview stats={stats} detailed={true} />;
+      case 'colleges':
+        return <CollegeDataManager />;
       case 'email':
         return <EmailServiceConfig />;
       case 'sheets':
@@ -137,7 +137,7 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
                   <div><strong>Login time:</strong> {new Date().toLocaleString()}</div>
                 </div>
               </div>
-
+              
               <div className="bg-white border border-gray-200 rounded-lg p-4">
                 <h3 className="font-semibold text-gray-800 mb-3">Connection Status</h3>
                 <div className="flex items-center space-x-2">
@@ -150,7 +150,7 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
                     {connectionStatus === 'limited' && 'Limited Connectivity'}
                     {connectionStatus === 'checking' && 'Checking Connection...'}
                   </span>
-                  <button
+                  <button 
                     onClick={fetchDashboardStats}
                     className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
                   >
@@ -158,7 +158,7 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
                   </button>
                 </div>
               </div>
-
+              
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
                 <h3 className="font-semibold text-green-800 mb-2">Session Persistence</h3>
                 <p className="text-green-700 text-sm">
@@ -191,7 +191,7 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
               {/* Connection Status */}
               <div className={`flex items-center space-x-1 px-2 py-1 rounded text-xs ${
                 connectionStatus === 'connected' ? 'bg-green-100 text-green-700' : 
-                connectionStatus === 'limited' ? 'bg-yellow-100 text-yellow-700' :
+                connectionStatus === 'limited' ? 'bg-yellow-100 text-yellow-700' : 
                 'bg-blue-100 text-blue-700'
               }`}>
                 <SafeIcon icon={FiWifi} />
@@ -286,8 +286,8 @@ const AdminDashboard = ({ user, profile, onLogout, isLoading: parentLoading }) =
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg text-left transition-all ${
-                    activeTab === tab.id
-                      ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm'
+                    activeTab === tab.id 
+                      ? 'bg-blue-50 text-blue-600 border border-blue-200 shadow-sm' 
                       : 'text-gray-600 hover:bg-gray-100'
                   }`}
                 >

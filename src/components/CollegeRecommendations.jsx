@@ -5,7 +5,7 @@ import * as FiIcons from 'react-icons/fi';
 import SafeIcon from '../common/SafeIcon';
 import { getCollegePredictions } from '../utils/collegePredictions';
 
-const { FiMapPin, FiStar, FiUsers, FiTrendingUp, FiFilter, FiDownload } = FiIcons;
+const { FiMapPin, FiStar, FiUsers, FiTrendingUp, FiFilter, FiDownload, FiUniversity } = FiIcons;
 
 const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
   const navigate = useNavigate();
@@ -21,10 +21,11 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
 
   const states = [
     'All States', 'Delhi', 'Maharashtra', 'Karnataka', 'Tamil Nadu', 'Uttar Pradesh',
-    'Gujarat', 'Rajasthan', 'West Bengal', 'Punjab'
+    'Gujarat', 'Rajasthan', 'West Bengal', 'Punjab', 'Kerala', 'Madhya Pradesh', 
+    'Assam', 'Haryana', 'Jharkhand', 'Puducherry'
   ];
 
-  const collegeTypes = ['All Types', 'Government', 'Private'];
+  const collegeTypes = ['All Types', 'Government', 'Private', 'Deemed University'];
 
   const chanceRanges = [
     { value: 'All', label: 'All Chances' },
@@ -44,12 +45,12 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
     applyFilters();
   }, [predictions, filters]);
 
-  const fetchCollegePredictions = () => {
+  const fetchCollegePredictions = async () => {
     setLoading(true);
     try {
       // Get predictions for user's state and all states
-      const userStatePredictions = getCollegePredictions(userRank, category, studentInfo?.state || 'All States');
-      const allStatePredictions = getCollegePredictions(userRank, category, 'All States');
+      const userStatePredictions = await getCollegePredictions(userRank, category, studentInfo?.state || 'All States');
+      const allStatePredictions = await getCollegePredictions(userRank, category, 'All States');
 
       // Combine and remove duplicates
       const allPredictions = [...userStatePredictions];
@@ -70,6 +71,8 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
     }
   };
 
+  // Rest of the component remains the same...
+  
   const applyFilters = () => {
     let filtered = [...predictions];
 
@@ -115,6 +118,13 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
       case 'location':
         filtered.sort((a, b) => a.location.localeCompare(b.location));
         break;
+      case 'fees':
+        filtered.sort((a, b) => {
+          const aFees = parseInt(a.fees.replace(/[^\d]/g, ''));
+          const bFees = parseInt(b.fees.replace(/[^\d]/g, ''));
+          return aFees - bFees;
+        });
+        break;
     }
 
     setFilteredPredictions(filtered);
@@ -136,6 +146,15 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
     if (chance >= 60) return 'Good';
     if (chance >= 40) return 'Moderate';
     return 'Low';
+  };
+  
+  const getTypeIcon = (type) => {
+    switch(type) {
+      case 'Government': return FiStar;
+      case 'Private': return FiUsers;
+      case 'Deemed University': return FiUniversity;
+      default: return FiUsers;
+    }
   };
 
   const exportCollegeList = () => {
@@ -216,7 +235,7 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <div className="bg-white p-3 rounded-lg text-center">
             <div className="text-lg font-bold text-green-600">
               {filteredPredictions.filter(c => c.admissionChance >= 60).length}
@@ -236,6 +255,12 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
             <div className="text-xs text-gray-600">Private</div>
           </div>
           <div className="bg-white p-3 rounded-lg text-center">
+            <div className="text-lg font-bold text-green-600">
+              {filteredPredictions.filter(c => c.type === 'Deemed University').length}
+            </div>
+            <div className="text-xs text-gray-600">Deemed Univ.</div>
+          </div>
+          <div className="bg-white p-3 rounded-lg text-center">
             <div className="text-lg font-bold text-orange-600">
               {filteredPredictions.filter(c => c.location === studentInfo?.state).length}
             </div>
@@ -250,7 +275,7 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
           <SafeIcon icon={FiFilter} className="text-gray-600" />
           <h4 className="font-semibold text-gray-800">Filters</h4>
         </div>
-        <div className="grid md:grid-cols-4 gap-4">
+        <div className="grid md:grid-cols-5 gap-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">State</label>
             <select
@@ -287,7 +312,7 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
               ))}
             </select>
           </div>
-          <div>
+          <div className="col-span-2">
             <label className="block text-sm font-medium text-gray-700 mb-1">Sort By</label>
             <select
               value={filters.sortBy}
@@ -298,6 +323,7 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
               <option value="cutoff">Cutoff Rank</option>
               <option value="name">College Name</option>
               <option value="location">Location</option>
+              <option value="fees">Fees (Low to High)</option>
             </select>
           </div>
         </div>
@@ -323,22 +349,33 @@ const CollegeRecommendations = ({ userRank, category, studentInfo }) => {
               key={index}
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: index * 0.1 }}
+              transition={{ delay: index * 0.05 }} // Faster animation for many items
               className="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow"
             >
               <div className="flex justify-between items-start mb-4">
                 <div className="flex-1">
-                  <h3 className="text-lg font-bold text-gray-800 mb-2">
-                    {college.name}
-                  </h3>
+                  <div className="flex items-center space-x-2 mb-2">
+                    <h3 className="text-lg font-bold text-gray-800">
+                      {college.name}
+                    </h3>
+                    <span className={`px-2 py-1 text-xs rounded-full bg-${
+                      college.type === 'Government' ? 'blue' : 
+                      college.type === 'Private' ? 'purple' : 'green'
+                    }-100 text-${
+                      college.type === 'Government' ? 'blue' : 
+                      college.type === 'Private' ? 'purple' : 'green'
+                    }-700`}>
+                      {college.type}
+                    </span>
+                  </div>
                   <div className="flex items-center space-x-4 text-sm text-gray-600 mb-3">
                     <div className="flex items-center space-x-1">
                       <SafeIcon icon={FiMapPin} />
                       <span>{college.location}</span>
                     </div>
                     <div className="flex items-center space-x-1">
-                      <SafeIcon icon={college.type === 'Government' ? FiStar : FiUsers} />
-                      <span>{college.type}</span>
+                      <SafeIcon icon={getTypeIcon(college.type)} />
+                      <span>Seats: {college.seats}</span>
                     </div>
                   </div>
                 </div>
