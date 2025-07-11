@@ -23,12 +23,12 @@ const RankPredictor = () => {
   const [showModal, setShowModal] = useState(false);
   const [studentInfo, setStudentInfo] = useState(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  
+  const currentYear = new Date().getFullYear(); // Get current year dynamically
 
   const handleScoreChange = (subject, value) => {
     const newScores = { ...scores, [subject]: value };
-    const total = parseInt(newScores.physics || 0) + 
-                  parseInt(newScores.chemistry || 0) + 
-                  parseInt(newScores.biology || 0);
+    const total = parseInt(newScores.physics || 0) + parseInt(newScores.chemistry || 0) + parseInt(newScores.biology || 0);
     newScores.total = total;
     setScores(newScores);
   };
@@ -43,11 +43,10 @@ const RankPredictor = () => {
     setIsSubmitting(true);
     try {
       console.log('Starting form submission...', formData);
-
+      
       // Calculate prediction
       const rankData = calculateRank(formData.scores.total, formData.category);
       const percentile = calculatePercentile(formData.scores.total);
-
       const predictionData = {
         ...rankData,
         percentile,
@@ -55,35 +54,34 @@ const RankPredictor = () => {
         category: formData.category,
         studentInfo: formData.studentInfo
       };
-
       console.log('Prediction data calculated:', predictionData);
-
+      
       // Save to database first
       console.log('Saving student data to database...');
       const savedStudent = await saveStudentPrediction(predictionData);
       console.log('Student data saved successfully:', savedStudent);
-
+      
       // Set prediction to show results
       setPrediction(predictionData);
       setStudentInfo(formData.studentInfo);
-
+      
       // Send email with prediction report
       try {
         console.log('Sending prediction email...');
         const emailResult = await sendPredictionEmail(predictionData);
         console.log('Email sent successfully:', emailResult);
-
+        
         // Log email success
         await logEmailSent({
           to: formData.studentInfo.email,
           subject: `🎯 Your NEET Rank Prediction Report - ${formData.studentInfo.fullName}`,
           messageId: emailResult.messageId || null
         });
-
+        
         alert('✅ Success! Your prediction has been calculated and the detailed report has been sent to your email address.');
       } catch (emailError) {
         console.error('Email sending failed:', emailError);
-
+        
         // Log email failure
         await logEmailSent({
           to: formData.studentInfo.email,
@@ -91,10 +89,9 @@ const RankPredictor = () => {
           status: 'failed',
           error: emailError.message
         });
-
+        
         alert('✅ Prediction calculated successfully! However, there was an issue sending the email. Please check your email address or try again later.');
       }
-
     } catch (error) {
       console.error('Failed to process prediction:', error);
       alert('❌ Error processing your prediction. Please try again. If the issue persists, please contact support.');
@@ -113,18 +110,18 @@ const RankPredictor = () => {
   return (
     <div className="max-w-6xl mx-auto space-y-8">
       {/* Hero Section */}
-      <motion.div
+      <motion.div 
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
         className="text-center bg-white rounded-2xl p-8 shadow-lg"
       >
         <h1 className="text-4xl font-bold text-gray-800 mb-4">
-          NEET Rank Predictor 2024
+          NEET Rank Predictor {currentYear}
         </h1>
         <p className="text-lg text-gray-600 mb-6">
           Predict your NEET rank and explore medical college admission possibilities
         </p>
-
+        
         {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {stats.map((stat, index) => (
@@ -151,14 +148,12 @@ const RankPredictor = () => {
           className="bg-white rounded-2xl p-6 shadow-lg"
         >
           <h2 className="text-2xl font-bold text-gray-800 mb-6">Enter Your Scores</h2>
-
-          <ScoreInput
-            scores={scores}
-            onScoreChange={handleScoreChange}
+          <ScoreInput 
+            scores={scores} 
+            onScoreChange={handleScoreChange} 
             category={category}
             onCategoryChange={setCategory}
           />
-
           <motion.button
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
@@ -195,7 +190,7 @@ const RankPredictor = () => {
       </div>
 
       {/* Student Info Modal */}
-      <StudentInfoModal
+      <StudentInfoModal 
         isOpen={showModal}
         onClose={() => setShowModal(false)}
         onSubmit={handleFormSubmit}

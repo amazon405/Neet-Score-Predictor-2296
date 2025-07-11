@@ -40,10 +40,46 @@ const Footer = () => {
           <div>
             <h3 className="text-lg font-semibold mb-4">Resources</h3>
             <ul className="space-y-2 text-sm text-gray-400">
-              <li><a href="#" className="hover:text-white transition-colors">NEET Syllabus</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Previous Papers</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Study Materials</a></li>
-              <li><a href="#" className="hover:text-white transition-colors">Mock Tests</a></li>
+              <li>
+                <a 
+                  href="https://getmbbsadmission.com/neet-syllabus/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="hover:text-white transition-colors"
+                >
+                  NEET Syllabus
+                </a>
+              </li>
+              <li>
+                <a 
+                  href="https://getmbbsadmission.com/neet-previous-year-papers/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="hover:text-white transition-colors"
+                >
+                  Previous Year Papers
+                </a>
+              </li>
+              <li>
+                <a 
+                  href="https://getmbbsadmission.com/neet-study-material/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="hover:text-white transition-colors"
+                >
+                  Study Materials
+                </a>
+              </li>
+              <li>
+                <a 
+                  href="https://getmbbsadmission.com/neet-mock-test/" 
+                  target="_blank" 
+                  rel="noopener noreferrer" 
+                  className="hover:text-white transition-colors"
+                >
+                  Mock Tests
+                </a>
+              </li>
             </ul>
           </div>
 
@@ -53,11 +89,11 @@ const Footer = () => {
             <div className="space-y-2 text-sm text-gray-400">
               <div className="flex items-center space-x-2">
                 <SafeIcon icon={FiMail} />
-                <span>info@neetpredictor.com</span>
+                <span>vinoddctm@gmail.com</span>
               </div>
               <div className="flex items-center space-x-2">
                 <SafeIcon icon={FiPhone} />
-                <span>+91 98765 43210</span>
+                <span>+91 88268 61147</span>
               </div>
               <div className="flex items-center space-x-2">
                 <SafeIcon icon={FiMapPin} />
