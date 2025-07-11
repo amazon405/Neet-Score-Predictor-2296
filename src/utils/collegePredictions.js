@@ -8,9 +8,28 @@ const fallbackCollegeDatabase = [
     name: "All India Institute of Medical Sciences (AIIMS), New Delhi",
     location: "Delhi",
     type: "Government",
+    quota: "All India Quota",
     cutoffRanks: { General: 50, OBC: 80, SC: 150, ST: 200, EWS: 60 },
     fees: "₹5,856/year",
     seats: 125
+  },
+  {
+    name: "Government Medical College, Mumbai",
+    location: "Maharashtra", 
+    type: "Government",
+    quota: "State Quota",
+    cutoffRanks: { General: 2500, OBC: 3500, SC: 5000, ST: 6000, EWS: 2800 },
+    fees: "₹50,000/year",
+    seats: 150
+  },
+  {
+    name: "Kasturba Medical College (KMC), Manipal",
+    location: "Karnataka",
+    type: "Private",
+    quota: "All India Quota",
+    cutoffRanks: { General: 8000, OBC: 12000, SC: 18000, ST: 20000, EWS: 9000 },
+    fees: "₹24,50,000/year",
+    seats: 250
   },
   // ... more colleges from your previous implementation
   // This is just a fallback - we'll try to fetch from Supabase first
@@ -36,7 +55,7 @@ const getCollegeDatabase = async () => {
   }
 };
 
-export const getCollegePredictions = async (userRank, category, preferredState) => {
+export const getCollegePredictions = async (userRank, category, preferredState, quotaPreference = 'All') => {
   const predictions = [];
   
   try {
@@ -47,13 +66,17 @@ export const getCollegePredictions = async (userRank, category, preferredState) 
       if (preferredState !== 'All States' && college.location !== preferredState) {
         return;
       }
-
+      
+      // Skip if quota filter is applied and doesn't match
+      if (quotaPreference !== 'All' && college.quota !== quotaPreference) {
+        return;
+      }
+      
       const cutoffRank = college.cutoffRanks[category];
       if (!cutoffRank) return;
-
+      
       // Calculate admission chances based on rank difference
       let admissionChance = 0;
-
       if (userRank <= cutoffRank * 0.7) {
         admissionChance = 95;
       } else if (userRank <= cutoffRank * 0.8) {
@@ -73,7 +96,7 @@ export const getCollegePredictions = async (userRank, category, preferredState) 
       } else if (userRank <= cutoffRank * 2) {
         admissionChance = 5;
       }
-
+      
       if (admissionChance > 0) {
         predictions.push({
           ...college,
@@ -82,7 +105,7 @@ export const getCollegePredictions = async (userRank, category, preferredState) 
         });
       }
     });
-
+    
     // Sort by admission chances (highest first)
     return predictions.sort((a, b) => b.admissionChance - a.admissionChance);
   } catch (error) {
@@ -94,7 +117,6 @@ export const getCollegePredictions = async (userRank, category, preferredState) 
 export const getCollegesByRankRange = async (minRank, maxRank, category) => {
   try {
     const collegeDatabase = await getCollegeDatabase();
-    
     return collegeDatabase.filter(college => {
       const cutoffRank = college.cutoffRanks[category];
       return cutoffRank && cutoffRank >= minRank && cutoffRank <= maxRank;
@@ -108,7 +130,6 @@ export const getCollegesByRankRange = async (minRank, maxRank, category) => {
 export const getTopCollegesByState = async (state, category, limit = 10) => {
   try {
     const collegeDatabase = await getCollegeDatabase();
-    
     return collegeDatabase
       .filter(college => college.location === state)
       .sort((a, b) => (a.cutoffRanks[category] || Infinity) - (b.cutoffRanks[category] || Infinity))
@@ -119,10 +140,45 @@ export const getTopCollegesByState = async (state, category, limit = 10) => {
   }
 };
 
-export const getCollegeRecommendations = async (userRank, category, studentState = null) => {
+export const getCollegesByQuota = async (quota, category, userRank) => {
+  try {
+    const collegeDatabase = await getCollegeDatabase();
+    return collegeDatabase
+      .filter(college => college.quota === quota)
+      .map(college => {
+        const cutoffRank = college.cutoffRanks[category];
+        let admissionChance = 0;
+        
+        if (cutoffRank && userRank) {
+          if (userRank <= cutoffRank * 0.8) {
+            admissionChance = 90;
+          } else if (userRank <= cutoffRank) {
+            admissionChance = 70;
+          } else if (userRank <= cutoffRank * 1.2) {
+            admissionChance = 40;
+          } else if (userRank <= cutoffRank * 1.5) {
+            admissionChance = 20;
+          }
+        }
+        
+        return {
+          ...college,
+          cutoffRank,
+          admissionChance
+        };
+      })
+      .filter(college => college.admissionChance > 0)
+      .sort((a, b) => b.admissionChance - a.admissionChance);
+  } catch (error) {
+    console.error('Error in getCollegesByQuota:', error);
+    return [];
+  }
+};
+
+export const getCollegeRecommendations = async (userRank, category, studentState = null, quotaPreference = 'All') => {
   try {
     // Get all predictions
-    const allPredictions = await getCollegePredictions(userRank, category, 'All States');
+    const allPredictions = await getCollegePredictions(userRank, category, 'All States', quotaPreference);
     
     // Separate into categories
     const highChance = allPredictions.filter(c => c.admissionChance >= 70);
@@ -133,6 +189,11 @@ export const getCollegeRecommendations = async (userRank, category, studentState
     const homeStateColleges = studentState ? 
       allPredictions.filter(c => c.location === studentState) : [];
     
+    // Separate by quota type
+    const allIndiaQuota = allPredictions.filter(c => c.quota === 'All India Quota');
+    const stateQuota = allPredictions.filter(c => c.quota === 'State Quota');
+    const managementQuota = allPredictions.filter(c => c.quota === 'Management Quota');
+    
     return {
       all: allPredictions,
       highChance,
@@ -141,7 +202,10 @@ export const getCollegeRecommendations = async (userRank, category, studentState
       homeState: homeStateColleges,
       government: allPredictions.filter(c => c.type === 'Government'),
       private: allPredictions.filter(c => c.type === 'Private'),
-      deemed: allPredictions.filter(c => c.type === 'Deemed University')
+      deemed: allPredictions.filter(c => c.type === 'Deemed University'),
+      allIndiaQuota,
+      stateQuota,
+      managementQuota
     };
   } catch (error) {
     console.error('Error in getCollegeRecommendations:', error);
@@ -153,7 +217,10 @@ export const getCollegeRecommendations = async (userRank, category, studentState
       homeState: [],
       government: [],
       private: [],
-      deemed: []
+      deemed: [],
+      allIndiaQuota: [],
+      stateQuota: [],
+      managementQuota: []
     };
   }
 };

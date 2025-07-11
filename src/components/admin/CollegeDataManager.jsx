@@ -12,6 +12,7 @@ const CollegeDataManager = () => {
   const [filteredColleges, setFilteredColleges] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('All');
+  const [filterQuota, setFilterQuota] = useState('All');
   const [isUploading, setIsUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -24,7 +25,9 @@ const CollegeDataManager = () => {
     total: 0,
     government: 0,
     private: 0,
-    deemed: 0
+    deemed: 0,
+    allIndiaQuota: 0,
+    stateQuota: 0
   });
   const [connectionStatus, setConnectionStatus] = useState('unknown');
   const [tableCreated, setTableCreated] = useState(false);
@@ -35,7 +38,7 @@ const CollegeDataManager = () => {
 
   useEffect(() => {
     filterColleges();
-  }, [colleges, searchTerm, filterType]);
+  }, [colleges, searchTerm, filterType, filterQuota]);
 
   const initializeComponent = async () => {
     setIsLoading(true);
@@ -108,13 +111,14 @@ const CollegeDataManager = () => {
         if (error.message.toLowerCase().includes('does not exist') || error.code === '42P01') {
           console.log('Colleges table does not exist, creating it now...');
           
-          // Create the table with direct SQL
+          // Create the table with direct SQL including quota column
           const createTableSQL = `
             CREATE TABLE IF NOT EXISTS colleges (
               id BIGSERIAL PRIMARY KEY,
               name TEXT NOT NULL,
               location TEXT NOT NULL,
               type TEXT NOT NULL,
+              quota TEXT NOT NULL DEFAULT 'All India Quota',
               cutoff_ranks JSONB NOT NULL,
               fees TEXT NOT NULL,
               seats INTEGER NOT NULL,
@@ -146,6 +150,28 @@ const CollegeDataManager = () => {
           throw error;
         }
       } else {
+        // Check if quota column exists, if not add it
+        try {
+          const { data: testQuota, error: quotaError } = await supabase
+            .from('colleges')
+            .select('quota')
+            .limit(1);
+          
+          if (quotaError && quotaError.message.includes('column "quota" does not exist')) {
+            console.log('Adding quota column to existing table...');
+            const addColumnSQL = `
+              ALTER TABLE colleges ADD COLUMN IF NOT EXISTS quota TEXT NOT NULL DEFAULT 'All India Quota';
+            `;
+            
+            const { error: addColumnError } = await supabase.rpc('exec_sql', { sql: addColumnSQL });
+            if (addColumnError) {
+              console.warn('Could not add quota column automatically:', addColumnError);
+            }
+          }
+        } catch (quotaCheckError) {
+          console.warn('Could not check/add quota column:', quotaCheckError);
+        }
+        
         console.log('Colleges table exists and is accessible');
         setTableCreated(true);
       }
@@ -189,12 +215,14 @@ const CollegeDataManager = () => {
       const processedColleges = data || [];
       setColleges(processedColleges);
       
-      // Calculate stats
+      // Calculate stats including quota breakdown
       const statsData = {
         total: processedColleges.length,
         government: processedColleges.filter(c => c.type === 'Government').length,
         private: processedColleges.filter(c => c.type === 'Private').length,
-        deemed: processedColleges.filter(c => c.type === 'Deemed University').length
+        deemed: processedColleges.filter(c => c.type === 'Deemed University').length,
+        allIndiaQuota: processedColleges.filter(c => c.quota === 'All India Quota').length,
+        stateQuota: processedColleges.filter(c => c.quota === 'State Quota').length
       };
       setStats(statsData);
       
@@ -226,6 +254,11 @@ const CollegeDataManager = () => {
       filtered = filtered.filter(college => college.type === filterType);
     }
     
+    // Apply quota filter
+    if (filterQuota !== 'All') {
+      filtered = filtered.filter(college => college.quota === filterQuota);
+    }
+    
     setFilteredColleges(filtered);
   };
 
@@ -254,8 +287,8 @@ const CollegeDataManager = () => {
       
       console.log(`Parsed ${data.length} colleges from CSV`);
       
-      // Validate data structure
-      const requiredFields = ['name', 'location', 'type', 'cutoffGeneral', 'cutoffOBC', 'cutoffSC', 'cutoffST', 'cutoffEWS', 'fees', 'seats'];
+      // Validate data structure - now including quota
+      const requiredFields = ['name', 'location', 'type', 'quota', 'cutoffGeneral', 'cutoffOBC', 'cutoffSC', 'cutoffST', 'cutoffEWS', 'fees', 'seats'];
       const missingFields = requiredFields.filter(field => !meta.fields.includes(field));
       
       if (missingFields.length > 0) {
@@ -267,6 +300,7 @@ const CollegeDataManager = () => {
         name: row.name?.trim() || '',
         location: row.location?.trim() || '',
         type: row.type?.trim() || '',
+        quota: row.quota?.trim() || 'All India Quota',
         cutoff_ranks: {
           General: parseInt(row.cutoffGeneral) || 0,
           OBC: parseInt(row.cutoffOBC) || 0,
@@ -328,14 +362,16 @@ const CollegeDataManager = () => {
   };
 
   const downloadTemplate = () => {
-    // CSV template header
-    const header = 'name,location,type,cutoffGeneral,cutoffOBC,cutoffSC,cutoffST,cutoffEWS,fees,seats\n';
+    // CSV template header - now including quota
+    const header = 'name,location,type,quota,cutoffGeneral,cutoffOBC,cutoffSC,cutoffST,cutoffEWS,fees,seats\n';
     
-    // Example data rows
+    // Example data rows with quota information
     const exampleRows = [
-      '"All India Institute of Medical Sciences (AIIMS), New Delhi","Delhi","Government",50,80,150,200,60,"₹5,856/year",125',
-      '"Kasturba Medical College (KMC), Manipal","Karnataka","Private",8000,12000,18000,20000,9000,"₹24,50,000/year",250',
-      '"Jawaharlal Institute of Postgraduate Medical Education & Research (JIPMER)","Puducherry","Deemed University",400,600,1100,1400,480,"₹8,000/year",200'
+      '"All India Institute of Medical Sciences (AIIMS), New Delhi","Delhi","Government","All India Quota",50,80,150,200,60,"₹5,856/year",125',
+      '"Kasturba Medical College (KMC), Manipal","Karnataka","Private","All India Quota",8000,12000,18000,20000,9000,"₹24,50,000/year",250',
+      '"Jawaharlal Institute of Postgraduate Medical Education & Research (JIPMER)","Puducherry","Deemed University","All India Quota",400,600,1100,1400,480,"₹8,000/year",200',
+      '"Government Medical College, Mumbai","Maharashtra","Government","State Quota",2500,3500,5000,6000,2800,"₹50,000/year",150',
+      '"Madras Medical College","Tamil Nadu","Government","State Quota",1800,2500,4000,5000,2000,"₹25,000/year",200'
     ].join('\n');
     
     const csvContent = header + exampleRows;
@@ -343,7 +379,7 @@ const CollegeDataManager = () => {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = 'college_data_template.csv';
+    link.download = 'college_data_template_with_quota.csv';
     link.click();
     URL.revokeObjectURL(url);
     
@@ -356,11 +392,12 @@ const CollegeDataManager = () => {
       return;
     }
     
-    // Transform data for CSV
+    // Transform data for CSV - now including quota
     const csvData = colleges.map(college => ({
       name: college.name,
       location: college.location,
       type: college.type,
+      quota: college.quota || 'All India Quota',
       cutoffGeneral: college.cutoff_ranks?.General || 0,
       cutoffOBC: college.cutoff_ranks?.OBC || 0,
       cutoffSC: college.cutoff_ranks?.SC || 0,
@@ -415,6 +452,7 @@ const CollegeDataManager = () => {
       name: college.name,
       location: college.location,
       type: college.type,
+      quota: college.quota || 'All India Quota',
       cutoffGeneral: college.cutoff_ranks?.General || 0,
       cutoffOBC: college.cutoff_ranks?.OBC || 0,
       cutoffSC: college.cutoff_ranks?.SC || 0,
@@ -439,6 +477,7 @@ const CollegeDataManager = () => {
         name: editFormData.name,
         location: editFormData.location,
         type: editFormData.type,
+        quota: editFormData.quota,
         cutoff_ranks: {
           General: parseInt(editFormData.cutoffGeneral) || 0,
           OBC: parseInt(editFormData.cutoffOBC) || 0,
@@ -484,12 +523,13 @@ const CollegeDataManager = () => {
 
   const createTableManually = () => {
     const tableSQL = `
--- Create colleges table
+-- Create colleges table with quota column
 CREATE TABLE IF NOT EXISTS colleges (
   id BIGSERIAL PRIMARY KEY,
   name TEXT NOT NULL,
   location TEXT NOT NULL,
   type TEXT NOT NULL,
+  quota TEXT NOT NULL DEFAULT 'All India Quota',
   cutoff_ranks JSONB NOT NULL,
   fees TEXT NOT NULL,
   seats INTEGER NOT NULL,
@@ -513,7 +553,7 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
     });
   };
 
-  // Sample data for direct insertion
+  // Sample data for direct insertion - now with quota
   const insertSampleData = async () => {
     try {
       setIsLoading(true);
@@ -523,6 +563,7 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
           name: "All India Institute of Medical Sciences (AIIMS), New Delhi",
           location: "Delhi",
           type: "Government",
+          quota: "All India Quota",
           cutoff_ranks: {
             General: 50,
             OBC: 80,
@@ -537,6 +578,7 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
           name: "Kasturba Medical College (KMC), Manipal",
           location: "Karnataka",
           type: "Private",
+          quota: "All India Quota",
           cutoff_ranks: {
             General: 8000,
             OBC: 12000,
@@ -548,9 +590,40 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
           seats: 250
         },
         {
+          name: "Government Medical College, Mumbai",
+          location: "Maharashtra",
+          type: "Government",
+          quota: "State Quota",
+          cutoff_ranks: {
+            General: 2500,
+            OBC: 3500,
+            SC: 5000,
+            ST: 6000,
+            EWS: 2800
+          },
+          fees: "₹50,000/year",
+          seats: 150
+        },
+        {
+          name: "Madras Medical College",
+          location: "Tamil Nadu",
+          type: "Government",
+          quota: "State Quota",
+          cutoff_ranks: {
+            General: 1800,
+            OBC: 2500,
+            SC: 4000,
+            ST: 5000,
+            EWS: 2000
+          },
+          fees: "₹25,000/year",
+          seats: 200
+        },
+        {
           name: "Jawaharlal Institute of Postgraduate Medical Education & Research (JIPMER)",
           location: "Puducherry",
           type: "Deemed University",
+          quota: "All India Quota",
           cutoff_ranks: {
             General: 400,
             OBC: 600,
@@ -753,8 +826,8 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
         </span>
       </div>
 
-      {/* Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Enhanced Stats with Quota breakdown */}
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
         <div className="bg-gradient-to-r from-blue-50 to-blue-100 p-4 rounded-xl">
           <div className="flex items-center justify-between">
             <div>
@@ -791,6 +864,24 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
             <SafeIcon icon={FiDatabase} className="text-2xl text-indigo-600" />
           </div>
         </div>
+        <div className="bg-gradient-to-r from-orange-50 to-orange-100 p-4 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">All India Quota</p>
+              <p className="text-2xl font-bold text-orange-600">{stats.allIndiaQuota}</p>
+            </div>
+            <SafeIcon icon={FiStar} className="text-2xl text-orange-600" />
+          </div>
+        </div>
+        <div className="bg-gradient-to-r from-teal-50 to-teal-100 p-4 rounded-xl">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-600">State Quota</p>
+              <p className="text-2xl font-bold text-teal-600">{stats.stateQuota}</p>
+            </div>
+            <SafeIcon icon={FiUsers} className="text-2xl text-teal-600" />
+          </div>
+        </div>
       </div>
 
       {/* CSV Upload Section */}
@@ -804,7 +895,10 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
             <div>
               <p className="text-sm font-medium text-blue-800">CSV File Format</p>
               <p className="text-xs text-blue-700 mb-2">
-                The CSV file must include the following columns: name, location, type, cutoffGeneral, cutoffOBC, cutoffSC, cutoffST, cutoffEWS, fees, seats
+                The CSV file must include the following columns: name, location, type, <strong>quota</strong>, cutoffGeneral, cutoffOBC, cutoffSC, cutoffST, cutoffEWS, fees, seats
+              </p>
+              <p className="text-xs text-blue-700 mb-2">
+                <strong>Quota options:</strong> "All India Quota", "State Quota", "Management Quota", "NRI Quota"
               </p>
               <button 
                 onClick={downloadTemplate} 
@@ -915,6 +1009,19 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
               <option value="Private">Private</option>
               <option value="Deemed University">Deemed University</option>
             </select>
+            
+            {/* Quota Filter */}
+            <select 
+              value={filterQuota} 
+              onChange={(e) => setFilterQuota(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="All">All Quotas</option>
+              <option value="All India Quota">All India Quota</option>
+              <option value="State Quota">State Quota</option>
+              <option value="Management Quota">Management Quota</option>
+              <option value="NRI Quota">NRI Quota</option>
+            </select>
           </div>
         </div>
         
@@ -927,6 +1034,7 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">College Name</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Type</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Quota</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cutoff (General)</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fees</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Seats</th>
@@ -951,6 +1059,16 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
                         'bg-indigo-100 text-indigo-800'
                       }`}>
                         {college.type || 'N/A'}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm">
+                      <span className={`inline-flex px-2 py-1 text-xs rounded-full ${
+                        college.quota === 'All India Quota' ? 'bg-orange-100 text-orange-800' : 
+                        college.quota === 'State Quota' ? 'bg-teal-100 text-teal-800' : 
+                        college.quota === 'Management Quota' ? 'bg-red-100 text-red-800' : 
+                        'bg-gray-100 text-gray-800'
+                      }`}>
+                        {college.quota || 'N/A'}
                       </span>
                     </td>
                     <td className="px-4 py-3 text-sm">{college.cutoff_ranks?.General || 'N/A'}</td>
@@ -998,7 +1116,7 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
               </button>
             ) : (
               <button
-                onClick={() => { setSearchTerm(''); setFilterType('All'); }}
+                onClick={() => { setSearchTerm(''); setFilterType('All'); setFilterQuota('All'); }}
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors"
               >
                 Reset Filters
@@ -1041,17 +1159,32 @@ CREATE POLICY "Authenticated users full access" ON colleges FOR ALL USING (auth.
                 </div>
               </div>
               
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">College Type</label>
-                <select
-                  value={editFormData.type || ''}
-                  onChange={(e) => handleEditFormChange('type', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                >
-                  <option value="Government">Government</option>
-                  <option value="Private">Private</option>
-                  <option value="Deemed University">Deemed University</option>
-                </select>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">College Type</label>
+                  <select
+                    value={editFormData.type || ''}
+                    onChange={(e) => handleEditFormChange('type', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="Government">Government</option>
+                    <option value="Private">Private</option>
+                    <option value="Deemed University">Deemed University</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Quota Type</label>
+                  <select
+                    value={editFormData.quota || ''}
+                    onChange={(e) => handleEditFormChange('quota', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="All India Quota">All India Quota</option>
+                    <option value="State Quota">State Quota</option>
+                    <option value="Management Quota">Management Quota</option>
+                    <option value="NRI Quota">NRI Quota</option>
+                  </select>
+                </div>
               </div>
               
               <div>

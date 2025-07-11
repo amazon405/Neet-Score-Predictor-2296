@@ -26,6 +26,7 @@ export const getCollegesForPredictor = async () => {
       name: college.name,
       location: college.location,
       type: college.type,
+      quota: college.quota || 'All India Quota', // Include quota field
       cutoffRanks: college.cutoff_ranks,
       fees: college.fees,
       seats: college.seats
@@ -72,6 +73,7 @@ export const addCollege = async (collegeData) => {
       .select();
     
     if (error) throw error;
+    
     return { success: true, data: data[0] };
   } catch (error) {
     console.error('Error adding college:', error);
@@ -89,6 +91,7 @@ export const updateCollege = async (id, collegeData) => {
       .select();
     
     if (error) throw error;
+    
     return { success: true, data: data[0] };
   } catch (error) {
     console.error('Error updating college:', error);
@@ -105,6 +108,7 @@ export const deleteCollege = async (id) => {
       .eq('id', id);
     
     if (error) throw error;
+    
     return { success: true };
   } catch (error) {
     console.error('Error deleting college:', error);
@@ -146,12 +150,29 @@ export const getCollegesByLocation = async (location) => {
   }
 };
 
+// Function to get colleges by quota
+export const getCollegesByQuota = async (quota) => {
+  try {
+    const { data, error } = await supabase
+      .from('colleges')
+      .select('*')
+      .eq('quota', quota)
+      .order('name');
+    
+    if (error) throw error;
+    return data || [];
+  } catch (error) {
+    console.error(`Error fetching colleges with ${quota}:`, error);
+    return [];
+  }
+};
+
 // Function to get college statistics
 export const getCollegeStatistics = async () => {
   try {
     const { data, error } = await supabase
       .from('colleges')
-      .select('type');
+      .select('type, quota, location');
     
     if (error) throw error;
     
@@ -161,6 +182,10 @@ export const getCollegeStatistics = async () => {
       government: colleges.filter(c => c.type === 'Government').length,
       private: colleges.filter(c => c.type === 'Private').length,
       deemed: colleges.filter(c => c.type === 'Deemed University').length,
+      allIndiaQuota: colleges.filter(c => c.quota === 'All India Quota').length,
+      stateQuota: colleges.filter(c => c.quota === 'State Quota').length,
+      managementQuota: colleges.filter(c => c.quota === 'Management Quota').length,
+      nriQuota: colleges.filter(c => c.quota === 'NRI Quota').length,
       locations: {} // Count by location
     };
     
@@ -180,6 +205,10 @@ export const getCollegeStatistics = async () => {
       government: 0,
       private: 0,
       deemed: 0,
+      allIndiaQuota: 0,
+      stateQuota: 0,
+      managementQuota: 0,
+      nriQuota: 0,
       locations: {}
     };
   }
